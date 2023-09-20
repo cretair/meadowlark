@@ -2,11 +2,24 @@ const express = require('express')
 const expressHandlebars = require('express-handlebars')
 const bodyParser = require('body-parser')
 const multiparty = require('multiparty')
+const cookieParser = require('cookie-parser')
+const expressSession = require('express-session')
 
+const credentials = require('./credentials')
 const handlers = require('./lib/handlers')
 const weatherMiddlware = require('./lib/middleware/weather')
+const flashMiddleware = require('./lib/middleware/flash')
+const nodemailer = require("nodemailer");
+//const htmlToFormattedText = require('html-to-formatted-text')
+const { convert } = require('html-to-text');
 
 const app = express()
+
+// nieco zmodyfikowana wersja oficjalnego wzorca regularnego adresu e-mail ze specyfikacji W3C HTML5:
+// https://html.spec.whatwg.org/multipage/forms.html#valid-e-mail-address
+const VALID_EMAIL_REGEX = new RegExp('^[a-zA-Z0-9.!#$%&\'*+\/=?^_`{|}~-]+@' +
+  '[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?' +
+  '(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$')
 
 // konfiguracja silnika widoków Handlebars
 app.engine('handlebars', expressHandlebars.engine({
@@ -24,11 +37,83 @@ app.set('view engine', 'handlebars')
 app.use(bodyParser.urlencoded({ extended: true }))
 app.use(bodyParser.json())
 
+app.use(cookieParser(credentials.cookieSecret))
+app.use(expressSession({
+  resave: false,
+  saveUninitialized: false,
+  secret: credentials.cookieSecret,
+}))
+
 const port = process.env.PORT || 3000
 
 app.use(express.static(__dirname + '/public'))
 
 app.use(weatherMiddlware)
+app.use(flashMiddleware)
+
+const mailTransport = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
+  auth: {
+    // TODO: replace `user` and `pass` values from <https://forwardemail.net>
+//    user: "mrhalatsan@gmail.com",
+//    pass: "scpavaxqrmhrcpgx",
+    user: credentials.gmail.user,
+    pass: credentials.gmail.password, 
+ },
+  tls: {
+    // do not fail on invalid certs
+    rejectUnauthorized: false,
+  },
+});
+
+app.post('/cart/checkout', (req, res, next) => {
+	const cart = req.session.cart
+	if(!cart) next(new Error('Cart does not exist.'))
+	const name = req.body.name || '', email = req.body.email || ''
+	// walidacja danych wejściowych
+	if(!email.match(VALID_EMAIL_REGEX))
+		return res.next(new Error('Invalid email address.'))
+	// przypisujemy losowy identyfikator koszyka; w normalnej sytuacji należy użyć identyfikatora z bazy danych
+//	cart.number = Math.random().toString().replace(/^0\.0*/, '')
+//	cart.billing = {
+//		name: name,
+//		email: email,
+//	}
+  res.render('email/cart-thank-you', { layout: null, cart: cart },
+    (err,html) => {
+        console.log('rendered email: ', html)
+        if(err) console.log('error in email template')
+        mailTransport.sendMail({
+          from: '"Meadowlark Travel": info@meadowlarktravel.com',
+          to: email,
+          subject: 'Podziękowanie za rezerwację wycieczki w biurze Meadowlark Travel',
+          html: html,
+          text: convert(html),
+        })
+          .then(info => {
+            console.log('wysłano! ', info)
+            res.render('cart-thank-you', { cart: cart })
+          })
+          .catch(err => {
+            console.error('Nie udało się wysłać potwierdzenia: ' + err.message)
+          })
+    }
+  )
+})
+
+app.get('*', (req, res) => {
+  // symulacja koszyka
+  req.session.cart = {
+    items: [
+      { id: '82RgrqGCAHqCf6rA2vujbT', qty: 1, guests: 2 },
+      { id: 'bqBtwqxpB4ohuxCBXRE9tq', qty: 1 },
+    ],
+  }
+  res.render('04-home')
+})
+
 
 app.get('/', handlers.home)
 
