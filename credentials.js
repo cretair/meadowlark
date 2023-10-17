@@ -9,7 +9,7 @@ module.exports = {
     pass: "scpavaxqrmhrcpgx",
   },
   mongo: {
-    connectionString: 'mongodb://localhost:27017'
+    connectionString: 'mongodb+srv://admin:halatsan@cluster0.wqgxbtj.mongodb.net/?retryWrites=true&w=majority'
   },
   postgres: {
     connectionString: 'postgres://yobyeoht:GAgeFpXwaIqGSa8dzt2e5F5x78jeaBpo@trumpet.db.elephantsql.com/yobyeoht'

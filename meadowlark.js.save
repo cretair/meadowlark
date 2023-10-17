@@ -20,9 +20,9 @@ const { ProfilingIntegration } = require ('@sentry/profiling-node')
 const app = express()
 const AWS = require("aws-sdk")
 const s3 = new AWS.S3()
-const filename = 'logo - Copy.png'
+const filename = 'logo-Copy.png'
 
-require('./db')
+s3 = new AWS.S3({ apiVersion: '2006-03-01' });
 
 switch(app.get('env')) {
   case 'development':
@@ -73,6 +73,31 @@ app.get('/epic-fail', (req, res) => {
 
 //app.get('*', (req, res) => res.send('online'))
 //apt.set('trust proxy')
+/*
+(async () => {
+  await s3
+    .putObject({
+       Bucket: "cretair-public", 
+       Key: "my-file.txt",
+//       Body: fs.readFileSync(__dirname + '/tmp/ + filename) 
+      Body: "hello world"  
+    })
+    .promise();
+})
+*/
+fs.readFile(sourceFile, function (err, data) {
+    if (err) { throw err; }
+
+    s3.client.putObject({
+        Bucket: cretair-public,
+        Key: 'tmp/logo-Copy.png',
+        Body: data,
+        ACL:'public-read'
+    }, function (res) {
+            console.log('Successfully uploaded file.');
+        })
+
+});
 
 process.on('uncaughtException', err => {
   console.error('NIEOBSŁUŻONY WYJĄTEK\n', err.stack);
@@ -85,6 +110,16 @@ process.on('uncaughtException', err => {
   process.exit(1)
 })
 
+switch(app.get('env')) {
+  case 'development':
+    app.use(morgan('dev'))
+    break
+  case 'production':
+    const stream = fs.createWriteStream(__dirname + '/access.log',
+      { flags: 'a' })
+    app.use(morgan('combined', { stream }))
+    break
+}
 
 // nieco zmodyfikowana wersja oficjalnego wzorca regularnego adresu e-mail ze specyfikacji W3C HTML5:
 // https://html.spec.whatwg.org/multipage/forms.html#valid-e-mail-address
@@ -174,7 +209,7 @@ app.post('/cart/checkout', (req, res, next) => {
     }
   )
 })
-/*
+
 app.get('*', (req, res) => {
   // symulacja koszyka
   req.session.cart = {
@@ -185,7 +220,7 @@ app.get('*', (req, res) => {
   }
   res.render('04-home')
 })
-*/
+
 
 app.get('/', handlers.home)
 
@@ -238,12 +273,6 @@ function startServer(port) {
   })
 }
 
-// wycieczki
-app.get('/vacations', handlers.listVacations)
-
-app.get('/set-currency/:currency', handlers.setCurrency)
-
-
 if(require.main === module) {
   // aplikacja uruchomiona bezpośrednio; start serwera aplikacji
   startServer(process.env.PORT || 3000)
@@ -252,5 +281,4 @@ if(require.main === module) {
   // funkcja tworząca serwer
   module.exports = startServer
 }
-
 
